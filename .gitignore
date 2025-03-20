@@ -3,3 +3,5 @@ node_modules
 users.json
 token-db-implementation.js
 .env
+.vscode
+data
