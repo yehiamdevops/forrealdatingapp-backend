@@ -4,4 +4,4 @@ users.json
 token-db-implementation.js
 .env
 .vscode
-data
+data/
