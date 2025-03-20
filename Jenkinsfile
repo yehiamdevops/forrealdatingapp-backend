@@ -14,7 +14,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git 'https://your-repo-url.git'
+                git 'https://github.com/yehiamdevops/my-back-end.git'
             }
         }
         stage('Add Env File'){
