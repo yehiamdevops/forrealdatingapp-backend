@@ -12,8 +12,8 @@ services:
     ports:
       - ${EXPRESS_PORT}:${EXPRESS_PORT}
       - ${SOCKET_PORT}:${SOCKET_PORT}
-    depends_on:
-      - mongodb
+    # depends_on:
+    #   - mongodb
     volumes:
       - ./backend-db:/app
       - /app/node_modules  
