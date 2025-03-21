@@ -11,9 +11,7 @@ pipeline {
     }
     stages {
         stage('Checkout') {
-            steps {
-                git 'https://github.com/yehiamdevops/my-back-end.git'
-            }
+            checkout scm
         }
         stage('Add Env File'){
             steps{
