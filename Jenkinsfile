@@ -18,14 +18,25 @@ pipeline {
         stage('Add Env File'){
             steps{
                 script{
-                    sh '''
-                        cat <<EOF > .env
-                        EXPRESS_PORT=${EXPRESS_PORT}
-                        TOKEN_STRING=${TOKEN_STRING}
-                        SOCKET_PORT=${SOCKET_PORT}
-                        MONGO_ATLAS_URL=${MONGO_ATLAS_URL}
-                        EOF
+                    if(isUnix()){
+
+                        sh '''
+                            cat <<EOF > .env
+                            EXPRESS_PORT=${EXPRESS_PORT}
+                            TOKEN_STRING=${TOKEN_STRING}
+                            SOCKET_PORT=${SOCKET_PORT}
+                            MONGO_ATLAS_URL=${MONGO_ATLAS_URL}
+                            EOF
                         '''
+                    }
+                    else{
+                        bat '''
+                            echo EXPRESS_PORT=${EXPRESS_PORT} > .env
+                            echo TOKEN_STRING=${TOKEN_STRING} >> .env
+                            echo SOCKET_PORT=${SOCKET_PORT} >> .env
+                            echo MONGO_ATLAS_URL=${MONGO_ATLAS_URL} >> .env
+                        '''
+                    }
                 }
             }
 
