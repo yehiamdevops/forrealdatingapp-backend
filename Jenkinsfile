@@ -1,10 +1,7 @@
 pipeline {
   agent {
-        // label 'compose'
-    docker {
-        image 'docker:cli'  // or 'docker:latest'
-        args '-v /var/run/docker.sock:/var/run/docker.sock -u root'  // Force root user
-    }
+        label 'compose'
+  
 
     }
     environment {
