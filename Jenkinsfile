@@ -1,6 +1,11 @@
 pipeline {
   agent {
-        label 'compose'
+        // label 'compose'
+        docker {
+            image 'docker:dind'
+            args '--privileged'
+        }
+
     }
     environment {
         // Define environment variables (can be loaded from Jenkins credentials)
