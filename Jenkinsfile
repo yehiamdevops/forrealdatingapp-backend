@@ -2,9 +2,9 @@ pipeline {
   agent {
         // label 'compose'
         docker {
-            image 'docker:dind'
-            args '--privileged'
-        }
+            image 'docker:cli'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+    }
 
     }
     environment {
