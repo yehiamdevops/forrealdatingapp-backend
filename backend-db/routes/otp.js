@@ -6,6 +6,8 @@ const router = require('express').Router();
 // Route to send OTP
 router.post('/send-otp', async (req, res) => {
     const { email, type } = req.body;
+    // console.log(email);
+    
   
     if (!email) {
       return res.status(400).send('Email is required');
@@ -26,9 +28,10 @@ router.post('/send-otp', async (req, res) => {
      
       }
       else if(type == "signup-otp"){
-  
-        if(db) return res.status(403).send('email exist');
+        // console.log("test signup");
         
+        if(db) return res.status(403).send('email exist');
+        otp = await sendOtp(email); 
         otpStorage.otp = otp; // Save OTP for verification
         otpObj = new OtpModel(otpStorage);
         await otpObj.save();

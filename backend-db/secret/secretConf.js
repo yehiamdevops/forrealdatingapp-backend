@@ -1,5 +1,5 @@
-// const dotenv = require('dotenv');
-// dotenv.config();
+const dotenv = require('dotenv');
+dotenv.config();
 
 module.exports = {
     EXPRESS_PORT : process.env.EXPRESS_PORT,
