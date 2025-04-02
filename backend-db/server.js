@@ -126,13 +126,18 @@ const server = net.createServer((socket) => {
 
                 }
                 messageObj = {
+                    senderID:UserSender._id,
                     senderUsername: UserSender.username,
+                    recieverID:UserReciver._id,
                     receiverUsername: UserReciver.username, 
                     message: content
                 }
                 let newMsg = new Message(messageObj);
                 await newMsg.save();
-                
+                await MatchModel.updateOne(
+                    { user_id: UserReciver._id, matched_user_id: UserSender._id }, // Match the authenticated user & their matched user
+                    { $inc: { messageCounter: 1 } }
+                );
 
                     
                     

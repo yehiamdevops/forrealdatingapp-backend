@@ -7,7 +7,6 @@ const { DislikeModel } = require('../models/DislikeModel.js');
 const LikeModel = require('../models/LikeModel.js');
 const { MatchModel, ValdiateUnMatch } = require('../models/MatchModel.js');
 const { Message } = require('../models/MessageModel.js');
-const { LogContextImpl } = require('twilio/lib/rest/serverless/v1/service/environment/log.js');
 
 
 router.get('/',auth, async (req, res) => {
@@ -25,24 +24,19 @@ router.get('/',auth, async (req, res) => {
 router.get('/queryget', auth, async (req, res) => {
   try {
       // Fetch source user and validate
-      let SourceUser = await UserModel.findById(req.tokenData._id);
-      if (!SourceUser) return res.status(404).json({ msg: "User not found" });
+      let sourceUser = await UserModel.findById(req.tokenData._id);
+      if (!sourceUser) return res.status(404).json({ msg: "User not found" });
 
       const maxQueries = 10;
       let skips = parseInt(req.query.page);
       skips = isNaN(skips) || skips < 1 ? 1 : skips;
 
-      let prefgender = SourceUser.preferredGender;
+      let prefgender = sourceUser.preferredGender;
       if (!prefgender) return res.status(400).json({ msg: "Preferred gender not set." });
 
-      let minAge = parseInt(req.query.minAge);
-      minAge = isNaN(minAge) || minAge < 18 ? 18 : minAge;
-
-      let maxAge = parseInt(req.query.maxAge);
-      maxAge = isNaN(maxAge) || maxAge > 99 ? 99 : maxAge;
-
-      console.log(prefgender, minAge, maxAge);
-
+      let minAge = sourceUser.minPreferredAge;
+      let maxAge = sourceUser.maxPreferredAge;
+      
       // Fetch exclusion lists in parallel
       const excludeIds = await Promise.all([
           DislikeModel.find({ user_id: req.tokenData._id }).distinct("disliked_user_id"),
@@ -53,10 +47,16 @@ router.get('/queryget', auth, async (req, res) => {
       // Combine and deduplicate
       const excludedArray = Array.from(new Set([...excludeIds[0], ...excludeIds[1], ...excludeIds[2]]));
 
-      // Construct query
+      // Construct query that ensures mutual compatibility:
+      // 1. The user matches the source user's preferred gender
+      // 2. The source user matches the target user's preferred gender
+      // 3. Age ranges are compatible both ways
       let query = {
           gender: prefgender,
+          preferredGender: sourceUser.gender, // Ensure they're interested in the source user's gender
           age: { $gte: minAge, $lte: maxAge },
+          minPreferredAge: { $lte: sourceUser.age }, // Their min age preference <= source user's age
+          maxPreferredAge: { $gte: sourceUser.age }, // Their max age preference >= source user's age
           ...(excludedArray.length > 0 && { _id: { $nin: excludedArray } })
       };
 
@@ -64,7 +64,8 @@ router.get('/queryget', auth, async (req, res) => {
       let data = await UserModel.find(query)
           .limit(maxQueries)
           .skip((skips - 1) * maxQueries);
-
+      // console.log(data);
+      
       res.json(data);
 
   } catch (err) {
@@ -114,7 +115,7 @@ router.post("/", async (req, res) => {
       res.status(500).json({ msg: "err", err })
     }
   });
-router.put('updateprofile/:id',auth, async (req, res) => {
+router.put('/updateprofile/:id',auth, async (req, res) => {
   
   
     let idEdit = req.params.id;
@@ -135,7 +136,7 @@ router.put('updateprofile/:id',auth, async (req, res) => {
         res.status(500).json({ msg: "err : ", err });
 
     }
-})
+});
 router.put('/addpicture/:id',auth, async (req, res) => {
   let idEdit = req.params.id;
   let { error } = validatePicture(req.body);
@@ -187,6 +188,32 @@ router.post('/signup', async (req, res) => {
 
 
 });
+router.post('/signup/bulk', async (req, res) => {
+  try {
+    const users = req.body; // Expecting an array of users
+    
+    if (!Array.isArray(users)) {
+      return res.status(400).json({ error: "Expected an array of users" });
+    }
+
+    // Hash passwords for all users
+    const usersWithHashedPasswords = await Promise.all(
+      users.map(async user => {
+        let { error } = validateSignup(user);
+        if (error) throw error;
+        
+        const hashedPassword = await bcrypt.hash(user.password, 12);
+        return { ...user, password: hashedPassword };
+      })
+    );
+
+    // Insert all users
+    const result = await UserModel.insertMany(usersWithHashedPasswords);
+    return res.status(201).json({ msg: "success", count: result.length });
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
+  }
+});
 
 router.post("/login" , async (req, res) => {
     // console.log(req.body);
@@ -197,7 +224,6 @@ router.post("/login" , async (req, res) => {
       
     }
     try {
-      // קודם כל לבדוק אם המייל שנשלח קיים  במסד
       let user = await UserModel.findOne({ username: req.body.username })
       if (!user) {
         return res.status(401).json({ msg: "Password or email is worng ,code:1" ,token:""});
@@ -290,7 +316,7 @@ router.get('/getmatches', auth, async (req, res) => {
 
       // Fetch full user profiles of matched users
       const matchedUsers = await UserModel.find({ _id: { $in: matchedUserIds } })
-      .limit(maxQueries).skip((skips - 1) * 10);
+      .limit(maxQueries).skip((skips - 1) * 10);//show 10 skip 0, show 10 skip 10 ,etc....
 
       return res.json(matchedUsers);
   } catch (err) {
@@ -400,7 +426,7 @@ router.post('/fetchmessages', auth, async (req, res) => {
     const UserSender = await UserModel.findOne({_id: userID});
     const UserReciver =await UserModel.findOne({_id: matchID});
     let result = await getChatHistory(UserSender.username, UserReciver.username);
-    console.log(result);
+    // console.log(result);
     
     return res.status(200).json(result);
     
@@ -435,6 +461,130 @@ router.put('/resetpassword', async(req, res)=>{
     
   }
 });
+router.get("/latest-messages", auth , async (req, res) => {
+  try {
+    const currentUser = req.tokenData._id; // Get current user from middleware
+    const currentUserdb = await UserModel.findOne({_id: currentUser}); 
+
+    const latestMessages = await Message.aggregate([
+      // 1. Filter messages where currentUser is the sender or receiver
+      {
+        $match: {
+          $or: [
+            { senderUsername: currentUserdb.username },
+            { receiverUsername: currentUserdb.username}
+          ]
+        }
+      },
+      // 2. Sort messages by timestamp in descending order (latest first)
+      { $sort: { timestamp: -1 } },
+      // 3. Group by match ID and keep only the latest message
+      {
+        $group: {
+          _id: {
+            matchId: {
+              $cond: {
+                if: { $lt: ["$senderUsername", "$receiverUsername"] },
+                then: { $concat: ["$senderUsername", "_", "$receiverUsername"] },
+                else: { $concat: ["$receiverUsername", "_", "$senderUsername"] }
+              }
+            }
+          },
+          lastMessage: { $first: "$$ROOT" } // Take the first (latest) message
+        }
+      },
+      // 4. Replace the root to return only the last message object
+      { $replaceRoot: { newRoot: "$lastMessage" } }
+    ]);
+
+    res.json(latestMessages); // Send the result as JSON
+  } catch (error) {
+    console.error("Error fetching latest messages:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+router.put("/update-counter",auth,  async (req, res) => {
+  const { messageCounters } = req.body; // Example: { "matchedUserId123": 5, "matchedUserId456": 2 }
+  const userId = req.tokenData._id; // Authenticated user's ID
+
+  try {
+      // Loop through each matched_user_id and update only the authenticated user's matches
+      for (const matchedUserId in messageCounters) {
+          const messageCount = messageCounters[matchedUserId];
+
+          await MatchModel.updateOne(
+              { user_id: userId, matched_user_id: matchedUserId }, // Match the authenticated user & their matched user
+              { $set: { messageCounter: messageCount } }
+          );
+      }
+
+      res.json({ success: true, message: "Message counters updated." });
+  } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
+  }
+});
+router.get("/unreadmessages",auth , async (req, res) => {
+    const userID = req.tokenData._id;
+    try {
+      const data = await MatchModel.find({user_id: userID});
+      return res.json(data);
+      
+    } catch (error) {
+      console.log(error);
+      return res.sendStatus(500);
+      
+    }
+
+});
+router.patch("/resetCounter/:matchid", auth, async (req, res) => {
+  const matchID = req.params.matchid;
+  const userID = req.tokenData._id;
+  try {
+    await MatchModel.updateOne({
+      user_id : userID,
+      matched_user_id : matchID
+      
+    },{
+      $set: {messageCounter : 0}
+    });
+    return res.sendStatus(201);
+    
+  } catch (error) {
+    console.log(error);
+    return res.sendStatus(500);
+    
+    
+  }
+
+});
+router.patch("/updatePreferrences", auth, async (req, res) => {
+  try {
+    const updates = {};
+    const { birthDate, age, gender, preferredGender, bio, minPreferredAge, maxPreferredAge } = req.body;
+
+    // Only update fields that are provided
+    if (birthDate !== undefined) updates.birthDate = birthDate;
+    if (age !== undefined) updates.age = age;
+    if (gender !== undefined) updates.gender = gender;
+    if (preferredGender !== undefined) updates.preferredGender = preferredGender;
+    if (bio !== undefined) updates.bio = bio;
+    if (minPreferredAge !== undefined) updates.minPreferredAge = minPreferredAge;
+    if (maxPreferredAge !== undefined) updates.maxPreferredAge = maxPreferredAge;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No valid fields provided for update" });
+    }
+
+    await UserModel.updateOne({ _id: req.tokenData._id }, { $set: updates });
+    return res.sendStatus(200);
+  } catch (error) {
+    console.error(error);
+    return res.sendStatus(500);
+  }
+});
+  
+
+
 
 // אני רוצה לייצא את הראטור לקונפיג ראוט
 module.exports = router;

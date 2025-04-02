@@ -4,7 +4,7 @@ const mongoose = require("mongoose");
 const MatchesSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   matched_user_id: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  
+  messageCounter:{ type: Number}
 });
 
 exports.MatchModel = mongoose.model("usersMatches", MatchesSchema);

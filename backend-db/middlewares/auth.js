@@ -12,11 +12,9 @@ const auth = async(req, res, next) =>{
         
         next();
         }
-        catch(err){
-           
+    catch(err){
         console.log(err);
-            
         return res.status(401).json({msg: "token dropped or expired",token:""});
-        }
+    }
     };
 module.exports = auth;
